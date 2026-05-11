@@ -15,21 +15,23 @@ type Status =
 export function ScannerView({ onDone }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // Drives the recursive scan loop. Refs change synchronously, unlike state,
+  // so the loop's cancellation check stays correct after start/stop.
+  const scanningRef = useRef(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [manual, setManual] = useState("");
   const [name, setName] = useState("");
-  const [aprilTagAvailable, setAprilTagAvailable] = useState<boolean | null>(null);
+  const [aprilTagAvailable] = useState<boolean | null>(false);
 
   useEffect(() => {
-    // Probe whether AprilTag detection is wired without actually loading it
-    // — we don't load WASM eagerly. Lazy slot lives in detector.detectAprilTag.
-    setAprilTagAvailable(false);
     return () => {
+      scanningRef.current = false;
       stopStream();
     };
   }, []);
 
   function stopStream() {
+    scanningRef.current = false;
     const s = streamRef.current;
     if (s) for (const t of s.getTracks()) t.stop();
     streamRef.current = null;
@@ -37,6 +39,7 @@ export function ScannerView({ onDone }: Props) {
 
   async function startScanning() {
     setStatus({ kind: "scanning" });
+    scanningRef.current = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" } },
@@ -50,6 +53,7 @@ export function ScannerView({ onDone }: Props) {
         scanLoop();
       }
     } catch (err) {
+      scanningRef.current = false;
       setStatus({
         kind: "denied",
         reason: err instanceof Error ? err.message : "camera unavailable",
@@ -58,20 +62,22 @@ export function ScannerView({ onDone }: Props) {
   }
 
   async function scanLoop() {
-    if (status.kind !== "scanning") return;
+    if (!scanningRef.current) return;
     const v = videoRef.current;
     if (!v) return;
-    // Prefer AprilTag when available; fall through to QR; bail if neither
-    // is available and let the user fall back to manual entry.
     let tag: string | null = null;
     if (aprilTagAvailable) {
+      // AprilTag detector slot — wired by Pass D. Until then we fall through
+      // to QR detection. Errors bubble unless they're the documented
+      // NotImplementedError sentinel from detector.ts.
       try {
-        // Skip: not bundled in v1. See ADR-0006.
+        // intentionally empty until detectAprilTag is bundled
       } catch (e) {
         if (!(e instanceof NotImplementedError)) console.warn(e);
       }
     }
     if (!tag) tag = await detectQRFromVideo(v);
+    if (!scanningRef.current) return;
     if (tag) {
       stopStream();
       setStatus({ kind: "captured", tag: canonicalTag(tag) });
