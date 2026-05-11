@@ -57,9 +57,18 @@ describe("toAffinityVector", () => {
     // Only `rooms`, optional `byTime`, and `generatedAt` are allowed.
     const allowed = new Set(["rooms", "byTime", "generatedAt"]);
     for (const k of Object.keys(v)) expect(allowed.has(k)).toBe(true);
-    // No numeric per-bucket detail.
-    expect(JSON.stringify(v)).not.toContain("50");
-    expect(JSON.stringify(v)).not.toContain("99");
+    // Each per-tag entry is normalised score (0..1) or a bucket *name*, not
+    // raw counts. Checking for raw digits in JSON would be too brittle —
+    // generatedAt is a unix-ms number that frequently shares digit runs with
+    // unrelated counts.
+    for (const score of Object.values(v.rooms)) {
+      expect(typeof score).toBe("number");
+      expect(score).toBeGreaterThanOrEqual(0);
+      expect(score).toBeLessThanOrEqual(1);
+    }
+    for (const bucket of Object.values(v.byTime ?? {})) {
+      expect(["morning", "afternoon", "evening", "night"]).toContain(bucket);
+    }
   });
 });
 
