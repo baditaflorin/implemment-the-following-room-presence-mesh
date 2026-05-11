@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "preact/hooks";
-import QRCode from "qrcode";
+import { useEffect, useState } from "preact/hooks";
+import { QRBlock } from "@/ui/QRBlock";
 import {
   acceptAnswer,
   acceptOffer,
@@ -193,40 +193,6 @@ export function MeshView() {
           onReset={reset}
         />
       )}
-    </div>
-  );
-}
-
-function QRBlock({ payload, caption }: { payload: string; caption: string }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    QRCode.toCanvas(canvasRef.current, payload, {
-      width: 256,
-      margin: 1,
-      color: { dark: "#0e1116", light: "#7dd3fc" },
-    }).catch(() => {
-      // QR may be too large for a single code; we still allow copy-paste.
-    });
-  }, [payload]);
-  return (
-    <div class="card flex flex-col items-center gap-2">
-      <canvas ref={canvasRef} class="bg-accent-400 rounded-lg" />
-      <div class="text-xs text-ink-400 text-center">{caption}</div>
-      <details class="w-full mt-1">
-        <summary class="cursor-pointer text-xs text-ink-400">show payload as text</summary>
-        <textarea
-          readOnly
-          class="w-full mt-2 h-32 rounded-lg bg-white/5 ring-1 ring-white/10 px-2 py-1 text-xs font-mono"
-          value={payload}
-        />
-        <button
-          class="btn-ghost text-xs mt-2"
-          onClick={() => navigator.clipboard?.writeText(payload)}
-        >
-          Copy
-        </button>
-      </details>
     </div>
   );
 }

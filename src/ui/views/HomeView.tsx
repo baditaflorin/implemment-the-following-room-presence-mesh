@@ -3,6 +3,22 @@ import { computeMyAffinity, type RoomAffinity } from "@/lib/affinity/engine";
 import { db, type Checkin, type Room } from "@/lib/storage/db";
 import { seedIfEmpty } from "@/lib/seed";
 import type { Route } from "@/ui/BottomNav";
+import { QRBlock } from "@/ui/QRBlock";
+
+/** Produce a short, URL-safe, human-typable tag id. */
+function newRoomTag(): string {
+  // 8 chars of base32-ish entropy = ~40 bits, plenty for a personal
+  // mesh and short enough that a guest could type it manually if the
+  // camera fails.
+  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+  const buf = new Uint8Array(8);
+  crypto.getRandomValues(buf);
+  let id = "";
+  for (let i = 0; i < buf.length; i += 1) {
+    id += alphabet[buf[i]! % alphabet.length];
+  }
+  return `rpm:room:${id}`;
+}
 
 interface Props {
   onNavigate: (r: Route) => void;
@@ -29,6 +45,10 @@ export function HomeView({ onNavigate }: Props) {
   const [seedNote, setSeedNote] = useState<string | null>(null);
   const [active, setActive] = useState<ActiveCheckin | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [creating, setCreating] = useState<{
+    tag: string;
+    name: string;
+  } | null>(null);
 
   async function refresh() {
     const rows = await computeMyAffinity();
@@ -66,6 +86,22 @@ export function HomeView({ onNavigate }: Props) {
   async function checkOut() {
     await db.endCheckin();
     await refresh();
+  }
+
+  async function startCreatingRoom() {
+    setCreating({ tag: newRoomTag(), name: "" });
+  }
+
+  async function saveCreatedRoom() {
+    if (!creating) return;
+    const name = creating.name.trim() || "Untitled room";
+    await db.upsertRoom({
+      tag: creating.tag,
+      name: name.slice(0, 80),
+      createdAt: Date.now(),
+    });
+    await refresh();
+    setCreating(null);
   }
 
   return (
@@ -137,8 +173,67 @@ export function HomeView({ onNavigate }: Props) {
       </section>
 
       <section>
+        <h2 class="text-sm uppercase tracking-wider text-ink-400 mb-2">Host a room</h2>
+        {creating ? (
+          <div class="card space-y-3">
+            <div>
+              <div class="text-xs uppercase tracking-wider text-ink-400 mb-1">Tag id</div>
+              <div class="font-mono text-sm">{creating.tag}</div>
+            </div>
+            <label class="block">
+              <div class="text-xs text-ink-400">
+                Display name (shown only to you and accepted peers)
+              </div>
+              <input
+                class="w-full mt-1 rounded-lg bg-white/5 ring-1 ring-white/10 px-3 py-2 min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
+                value={creating.name}
+                onInput={(e) =>
+                  setCreating({ ...creating, name: (e.target as HTMLInputElement).value })
+                }
+                placeholder="e.g. Café Pavone — counter"
+                autoFocus
+                maxLength={80}
+              />
+            </label>
+            <QRBlock
+              payload={creating.tag}
+              caption="Print or screenshot this QR. Guests scan it from the Scan tab."
+            />
+            <div class="flex gap-2">
+              <button
+                class="btn min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
+                onClick={saveCreatedRoom}
+              >
+                Save room
+              </button>
+              <button
+                class="btn-ghost min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
+                onClick={() => setCreating(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            class="card w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
+            onClick={() => void startCreatingRoom()}
+          >
+            <div class="font-medium">Create a room tag</div>
+            <div class="text-xs text-ink-400 mt-1">
+              Generate a fresh QR code your space (or guests) can scan. The tag stays on this device
+              until you choose to share or print it.
+            </div>
+          </button>
+        )}
+      </section>
+
+      <section>
         <h2 class="text-sm uppercase tracking-wider text-ink-400 mb-2">Mesh</h2>
-        <button class="card w-full text-left" onClick={() => onNavigate("mesh")}>
+        <button
+          class="card w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
+          onClick={() => onNavigate("mesh")}
+        >
           <div class="font-medium">Compare with a friend</div>
           <div class="text-xs text-ink-400 mt-1">
             Scan their QR or paste their handshake. Nothing leaves your device unless you accept.

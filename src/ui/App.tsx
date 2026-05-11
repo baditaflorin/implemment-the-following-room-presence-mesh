@@ -6,11 +6,16 @@ import { MeshView } from "@/ui/views/MeshView";
 import { RoomsView } from "@/ui/views/RoomsView";
 import { SettingsView } from "@/ui/views/SettingsView";
 import { BottomNav, type Route } from "@/ui/BottomNav";
+import { Onboarding } from "@/ui/Onboarding";
+import { markOnboarded, shouldShowOnboarding } from "@/ui/onboardingStorage";
 import { db } from "@/lib/storage/db";
 
 export function App() {
   const [route, setRoute] = useState<Route>("home");
   const [ready, setReady] = useState(false);
+  const [showIntro, setShowIntro] = useState(() =>
+    shouldShowOnboarding(typeof window === "undefined" ? null : window.localStorage),
+  );
 
   useEffect(() => {
     db.open()
@@ -20,6 +25,11 @@ export function App() {
         setReady(true);
       });
   }, []);
+
+  const dismissIntro = () => {
+    markOnboarded(window.localStorage);
+    setShowIntro(false);
+  };
 
   return (
     <div class="min-h-full flex flex-col">
@@ -52,6 +62,7 @@ export function App() {
       </main>
 
       <BottomNav route={route} onChange={setRoute} />
+      {showIntro ? <Onboarding onDismiss={dismissIntro} /> : null}
     </div>
   );
 }
