@@ -24,9 +24,7 @@
 
 const DEFAULT_TURN_TOKEN_URL = "https://turn.0docker.com/credentials";
 
-export const STUN_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-];
+export const STUN_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 
 type TurnCredentialResponse = {
   username: string;
