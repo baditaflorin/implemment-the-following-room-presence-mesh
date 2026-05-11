@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { canonicalTag, detectQRFromVideo, NotImplementedError } from "@/lib/scanner/detector";
+import {
+  aprilTagBundlePresent,
+  canonicalTag,
+  detectAprilTag,
+  detectQRFromVideo,
+  NotImplementedError,
+} from "@/lib/scanner/detector";
 import { db } from "@/lib/storage/db";
 
 interface Props {
@@ -21,9 +27,17 @@ export function ScannerView({ onDone }: Props) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [manual, setManual] = useState("");
   const [name, setName] = useState("");
-  const [aprilTagAvailable] = useState<boolean | null>(false);
+  const [aprilTagAvailable, setAprilTagAvailable] = useState<boolean | null>(null);
+  // Mirror the state into a ref so the recursive scan loop reads the current
+  // value without depending on closure freshness.
+  const aprilTagAvailableRef = useRef(false);
 
   useEffect(() => {
+    aprilTagAvailableRef.current = aprilTagAvailable === true;
+  }, [aprilTagAvailable]);
+
+  useEffect(() => {
+    aprilTagBundlePresent().then((ok) => setAprilTagAvailable(ok));
     return () => {
       scanningRef.current = false;
       stopStream();
@@ -66,14 +80,18 @@ export function ScannerView({ onDone }: Props) {
     const v = videoRef.current;
     if (!v) return;
     let tag: string | null = null;
-    if (aprilTagAvailable) {
-      // AprilTag detector slot — wired by Pass D. Until then we fall through
-      // to QR detection. Errors bubble unless they're the documented
-      // NotImplementedError sentinel from detector.ts.
+    if (aprilTagAvailableRef.current) {
       try {
-        // intentionally empty until detectAprilTag is bundled
+        tag = await detectAprilTag(v);
       } catch (e) {
-        if (!(e instanceof NotImplementedError)) console.warn(e);
+        if (e instanceof NotImplementedError) {
+          // Bundle missing or worker failed to init — disable for the rest
+          // of this session so we don't retry on every loop tick.
+          aprilTagAvailableRef.current = false;
+          setAprilTagAvailable(false);
+        } else {
+          console.warn(e);
+        }
       }
     }
     if (!tag) tag = await detectQRFromVideo(v);
@@ -121,9 +139,11 @@ export function ScannerView({ onDone }: Props) {
               <video ref={videoRef} playsInline muted class="w-full h-full object-cover" />
             </div>
             <div class="mt-2 text-xs text-ink-400">
-              {aprilTagAvailable
-                ? "Looking for AprilTags and QR codes…"
-                : "Looking for QR codes. (AprilTag-WASM not bundled in this build.)"}
+              {aprilTagAvailable === null
+                ? "Looking for codes…"
+                : aprilTagAvailable
+                  ? "Looking for AprilTags and QR codes…"
+                  : "Looking for QR codes. (AprilTag bundle not available.)"}
             </div>
           </div>
         )}
