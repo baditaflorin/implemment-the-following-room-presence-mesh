@@ -17,7 +17,7 @@
  * weights once from a public CDN, with the user's explicit consent.
  */
 
-import type { PeerOverlap } from "@/lib/affinity/engine";
+import { timeLabel, type PeerOverlap, type TimeOfDay } from "@/lib/affinity/engine";
 
 export type SuggestionBackend = "template" | "local-llm";
 
@@ -25,6 +25,32 @@ export interface Suggestion {
   text: string;
   backend: SuggestionBackend;
   generatedAt: number;
+}
+
+function consensusTime(strong: PeerOverlap[]): TimeOfDay | null {
+  // Tally the sharedTime field on each strong overlap's top tag. Return
+  // the most-agreed-on bucket only if at least half the strong overlaps
+  // agree; otherwise null (don't fabricate a time).
+  const counts: Record<string, number> = {};
+  let total = 0;
+  for (const o of strong) {
+    const t = o.sharedTags[0]?.sharedTime;
+    if (!t) continue;
+    counts[t] = (counts[t] ?? 0) + 1;
+    total += 1;
+  }
+  if (total === 0) return null;
+  let best: TimeOfDay | null = null;
+  let bestN = 0;
+  for (const [k, n] of Object.entries(counts)) {
+    if (n > bestN) {
+      bestN = n;
+      best = k as TimeOfDay;
+    }
+  }
+  // Strict majority. A 1-1 split is not consensus — we'd rather drop the
+  // bucket from the sentence than invent one.
+  return bestN * 2 > total ? best : null;
 }
 
 export function templateSuggestion(overlaps: PeerOverlap[], myTopRoom?: string): Suggestion {
@@ -42,6 +68,16 @@ export function templateSuggestion(overlaps: PeerOverlap[], myTopRoom?: string):
   if (strong.length === 0) {
     const top = overlaps[0]!;
     const sharedName = top.sharedTags[0]?.name;
+    const sharedTime = top.sharedTags[0]?.sharedTime;
+    if (sharedName && sharedTime) {
+      return {
+        text: `You and ${top.peerLabel} both turn up at the ${sharedName} around ${timeLabel(
+          sharedTime,
+        )}. Worth a quick hello.`,
+        backend: "template",
+        generatedAt: now,
+      };
+    }
     return {
       text: sharedName
         ? `You and ${top.peerLabel} both stop by the ${sharedName}. Worth a quick hello next time.`
@@ -55,10 +91,12 @@ export function templateSuggestion(overlaps: PeerOverlap[], myTopRoom?: string):
     .slice(0, 3)
     .map((s) => s.peerLabel)
     .join(", ");
+  const time = consensusTime(strong);
+  const where = time ? `to the ${groupRoom} in ${timeLabel(time)}` : `to the ${groupRoom}`;
   return {
     text: `${strong.length} other ${
       strong.length === 1 ? "person" : "people"
-    } also gravitate to the ${groupRoom} (${names}). Want a coffee tomorrow morning?`,
+    } also gravitate ${where} (${names}). Coffee tomorrow?`,
     backend: "template",
     generatedAt: now,
   };

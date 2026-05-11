@@ -23,9 +23,15 @@ export interface Peer {
   lastSeen: number;
 }
 
+export type TimeOfDay = "morning" | "afternoon" | "evening" | "night";
+
 export interface AffinityVector {
   // Map of room-tag -> normalised affinity score (0..1).
   rooms: Record<string, number>;
+  // Optional per-tag dominant time-of-day bucket. Sharing the *dominant
+  // bucket* (one of four options) discloses far less than a full hour
+  // distribution while still letting two peers detect shared rhythms.
+  byTime?: Record<string, TimeOfDay>;
   generatedAt: number;
 }
 
