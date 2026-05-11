@@ -1,5 +1,8 @@
-/* room-presence-mesh service worker — minimal app-shell cache. */
-const CACHE = "rpm-shell-v1";
+/* room-presence-mesh service worker — minimal app-shell cache.
+ * mp1hewb7 is replaced at build time by the rpm-replace-sw-hash
+ * Vite plugin (see vite.config.ts). In dev (vite serve) the literal
+ * "mp1hewb7" survives, which is fine — dev does not register SW. */
+const CACHE = "rpm-shell-mp1hewb7";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
