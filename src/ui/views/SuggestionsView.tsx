@@ -18,8 +18,20 @@ export function SuggestionsView() {
 
   useEffect(() => {
     (async () => {
-      const stored = await db.getMeta<SuggestionBackend>("suggestion-backend");
-      if (stored) setBackend(stored);
+      const storedRaw = await db.getMeta<string>("suggestion-backend");
+      // Migrate the deprecated "local-llm" choice (which was never wired to a
+      // real model) to the new narrative backend so existing users see real
+      // output instead of silently falling back to the template generator.
+      const stored: SuggestionBackend | null =
+        storedRaw === "narrative" || storedRaw === "template"
+          ? storedRaw
+          : storedRaw === "local-llm"
+            ? "narrative"
+            : null;
+      if (stored) {
+        setBackend(stored);
+        if (storedRaw === "local-llm") await db.setMeta("suggestion-backend", "narrative");
+      }
       const mine = await computeMyAffinity();
       setMy(mine);
       const myVec = toAffinityVector(mine);
@@ -32,7 +44,7 @@ export function SuggestionsView() {
       results.sort((a, b) => b.score - a.score);
       setOverlaps(results);
       const top = mine[0]?.name;
-      setSuggestion(await suggest(stored ?? "template", results, top));
+      setSuggestion(await suggest(stored ?? "template", results, top, mine));
       setLoading(false);
     })();
   }, []);
@@ -40,7 +52,7 @@ export function SuggestionsView() {
   async function regenerate(b: SuggestionBackend) {
     setBackend(b);
     await db.setMeta("suggestion-backend", b);
-    setSuggestion(await suggest(b, overlaps, my[0]?.name));
+    setSuggestion(await suggest(b, overlaps, my[0]?.name, my));
   }
 
   if (loading) {
@@ -65,15 +77,16 @@ export function SuggestionsView() {
               Template
             </button>
             <button
-              class={backend === "local-llm" ? "btn" : "btn-ghost"}
-              onClick={() => regenerate("local-llm")}
+              class={backend === "narrative" ? "btn" : "btn-ghost"}
+              onClick={() => regenerate("narrative")}
             >
-              Local LLM
+              Narrative
             </button>
           </div>
           <p class="mt-2 text-xs text-ink-400">
-            The local-LLM backend will lazily download a small model on first use (not yet bundled
-            in v1). Until then it falls back to the template generator.
+            Narrative is a longer, multi-sentence framing — it names several peers, references the
+            rooms they share with you, and proposes a concrete next step. Still generated locally
+            from your own data; no model download, no network call.
           </p>
         </div>
       )}
