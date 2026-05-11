@@ -8,6 +8,7 @@ import {
   sendAffinity,
   type PeerSession,
 } from "@/lib/mesh/peer";
+import { fetchIceServers } from "@/lib/mesh/turnConfig";
 import {
   computeMyAffinity,
   overlapWith,
@@ -56,7 +57,11 @@ export function MeshView() {
   }
 
   async function startHost() {
-    const { session, payload } = await createOffer({ label: label || "anonymous" });
+    // Fetch HMAC TURN credentials so relay candidates land in the QR payload
+    // before we encode it. Without this, two peers behind symmetric NAT cannot
+    // connect even after exchanging QRs. Falls back to STUN-only on failure.
+    const iceServers = await fetchIceServers();
+    const { session, payload } = await createOffer({ label: label || "anonymous", iceServers });
     const next: HostState = {
       session,
       offer: payload,
@@ -91,8 +96,10 @@ export function MeshView() {
 
   async function startJoin() {
     if (!joinOfferInput) return;
+    const iceServers = await fetchIceServers();
     const { session, answer, peerLabel } = await acceptOffer(joinOfferInput, {
       label: label || "anonymous",
+      iceServers,
     });
     const next: JoinState = {
       session,
