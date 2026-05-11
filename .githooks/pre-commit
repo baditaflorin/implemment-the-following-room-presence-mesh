@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+echo "[pre-commit] prettier --check"
+npx --yes prettier --check . || {
+  echo "✗ prettier failed — run 'make fmt'"
+  exit 1
+}
+echo "[pre-commit] tsc --noEmit"
+npx --yes tsc -b --pretty || exit 1
+if command -v gitleaks >/dev/null 2>&1; then
+  echo "[pre-commit] gitleaks protect --staged"
+  gitleaks protect --staged --redact || exit 1
+else
+  echo "[pre-commit] gitleaks not installed — skipping (install for secret scanning)"
+fi

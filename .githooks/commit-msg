@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+msg_file="${1:-}"
+[ -z "$msg_file" ] && exit 0
+first=$(head -n1 "$msg_file")
+# Allow merge / revert / fixup commits through.
+if [[ "$first" =~ ^(Merge|Revert|fixup!|squash!) ]]; then exit 0; fi
+re='^(feat|fix|docs|chore|refactor|test|ops|data|perf|build|ci|style)(\([^)]+\))?: .+'
+if ! [[ "$first" =~ $re ]]; then
+  echo "✗ commit subject must be Conventional Commits, got:"
+  echo "  $first"
+  echo "  examples: feat: scaffold scanner view  |  docs: rebuild ADRs  |  data: refresh docs/"
+  exit 1
+fi

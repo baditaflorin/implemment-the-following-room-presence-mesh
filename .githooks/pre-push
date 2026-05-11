@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+echo "[pre-push] vitest"
+npm test --silent || exit 1
+echo "[pre-push] build"
+make build
+echo "[pre-push] smoke"
+make smoke

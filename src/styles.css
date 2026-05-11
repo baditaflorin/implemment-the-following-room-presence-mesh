@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+  body {
+    font-feature-settings:
+      "ss01" on,
+      "cv05" on;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button {
+    touch-action: manipulation;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-ink-700/40 ring-1 ring-white/5 p-4;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 font-medium
+           bg-accent-500 text-ink-900 hover:bg-accent-400 active:scale-[.98]
+           disabled:opacity-50 disabled:cursor-not-allowed transition;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
+           bg-white/5 hover:bg-white/10 text-ink-50 ring-1 ring-white/10 transition;
+  }
+  .pill {
+    @apply inline-block px-2 py-0.5 rounded-full text-xs bg-white/5 ring-1 ring-white/10;
+  }
+}
