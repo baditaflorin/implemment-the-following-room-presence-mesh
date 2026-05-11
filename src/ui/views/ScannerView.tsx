@@ -28,6 +28,7 @@ export function ScannerView({ onDone }: Props) {
   const [manual, setManual] = useState("");
   const [name, setName] = useState("");
   const [aprilTagAvailable, setAprilTagAvailable] = useState<boolean | null>(null);
+  const [checkIn, setCheckIn] = useState(false);
   // Mirror the state into a ref so the recursive scan loop reads the current
   // value without depending on closure freshness.
   const aprilTagAvailableRef = useRef(false);
@@ -107,14 +108,24 @@ export function ScannerView({ onDone }: Props) {
   async function commit(tag: string) {
     const t = canonicalTag(tag);
     if (!t) return;
+    const now = Date.now();
     const existing = await db.getRoom(t);
     const roomName = (name.trim() || existing?.name || t).slice(0, 80);
     await db.upsertRoom({
       tag: t,
       name: roomName,
-      createdAt: existing?.createdAt ?? Date.now(),
+      createdAt: existing?.createdAt ?? now,
     });
-    await db.recordVisit({ tag: t, ts: Date.now() });
+    // If the user was already checked in elsewhere, close that out first so
+    // dwell is recorded on the prior visit. Then either start a new check-in
+    // or just log a one-shot visit.
+    if (checkIn) {
+      await db.endCheckin(now);
+      const visitId = await db.recordVisit({ tag: t, ts: now });
+      await db.startCheckin(t, visitId, now);
+    } else {
+      await db.recordVisit({ tag: t, ts: now });
+    }
     onDone();
   }
 
@@ -172,6 +183,24 @@ export function ScannerView({ onDone }: Props) {
             </button>
           </div>
         )}
+      </div>
+
+      <div class="card">
+        <label class="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            class="mt-1"
+            checked={checkIn}
+            onChange={(e) => setCheckIn((e.target as HTMLInputElement).checked)}
+          />
+          <span>
+            Check in here (track dwell)
+            <span class="block text-xs text-ink-400 mt-0.5">
+              While checked in, Home shows live elapsed time. Scanning another room — or tapping
+              Check out — finalises the dwell on this visit.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div class="card">

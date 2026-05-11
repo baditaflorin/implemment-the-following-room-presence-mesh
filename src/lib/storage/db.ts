@@ -43,6 +43,12 @@ export interface MatchRecord {
   suggestedAt: number;
 }
 
+export interface Checkin {
+  tag: string;
+  visitId: number;
+  since: number;
+}
+
 interface Schema {
   rooms: { key: string; value: Room };
   visits: { key: number; value: Visit; indexes: { "by-tag": string; "by-ts": number } };
@@ -121,6 +127,34 @@ class Db {
 
   async visitsByTag(tag: string): Promise<Visit[]> {
     return this.require().getAllFromIndex("visits", "by-tag", tag);
+  }
+
+  async setVisitDwell(id: number, dwellSec: number): Promise<void> {
+    const h = this.require();
+    const v = await h.get("visits", id);
+    if (!v) return;
+    v.dwellSec = dwellSec;
+    await h.put("visits", v);
+  }
+
+  // Check-in -------------------------------------------------------------
+
+  async startCheckin(tag: string, visitId: number, since: number): Promise<void> {
+    await this.setMeta("current-checkin", { tag, visitId, since });
+  }
+
+  async getCurrentCheckin(): Promise<Checkin | null> {
+    const c = await this.getMeta<Checkin>("current-checkin");
+    return c ?? null;
+  }
+
+  async endCheckin(now = Date.now()): Promise<Checkin | null> {
+    const c = await this.getCurrentCheckin();
+    if (!c) return null;
+    const dwell = Math.max(0, Math.floor((now - c.since) / 1000));
+    await this.setVisitDwell(c.visitId, dwell);
+    await this.require().delete("meta", "current-checkin");
+    return { ...c };
   }
 
   // Peers ------------------------------------------------------------------
